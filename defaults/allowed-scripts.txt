@@ -1,0 +1,5 @@
+# Allowed scripts - /data/adb/bootloop-protector/allowed-scripts.txt
+# Scripts listed here are never disabled by a rescue.
+# One file name per line, as found in /data/adb/post-fs-data.d,
+# post-mount.d, service.d or boot-completed.d.
+# Lines starting with # are ignored.

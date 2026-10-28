@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Bootloop Protector - Help</title>
+  <style>
+    :root {
+      --bg:#080a0a;--bg2:#0c0f0f;--surface:#111515;--surface2:#171c1c;
+      --border:#1f2727;--border2:#2b3535;
+      --teal:#2dd4bf;--teal-dim:#2dd4bf30;--amber:#f5a623;--amber-dim:#f5a62322;
+      --green:#7ecb35;--red:#e05c5c;--red-dim:#e05c5c22;--cyan:#4ecdc4;--purple:#b07fff;
+      --text:#a9b8b4;--text-dim:#52605d;--text-hi:#e6f0ee;
+      --mono:ui-monospace,'IBM Plex Mono','Roboto Mono',Menlo,Consolas,monospace;
+      --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.7;min-height:100vh;
+      padding-bottom:calc(env(safe-area-inset-bottom,0px) + 40px);
+      padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);}
+    .header{background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 16px;padding-top:calc(env(safe-area-inset-top,0px) + 12px);
+      display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:10;}
+    .header-left{display:flex;align-items:center;gap:10px;min-width:0;}
+    .logo{width:38px;height:38px;background:linear-gradient(135deg,#0f2220,#081010);border:1px solid var(--teal);border-radius:9px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px var(--teal-dim);flex-shrink:0;}
+    .logo svg{width:26px;height:26px;overflow:visible;}
+    .logo .ring{transform-origin:12px 12px;animation:spin 6s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    @media (prefers-reduced-motion:reduce){.logo .ring{animation:none;}}
+    .header-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .header-sub{font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-top:2px;}
+    .back-btn{background:transparent;border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:7px 12px;font-size:11px;font-family:var(--mono);cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:5px;}
+    .back-btn:active{opacity:0.5;}
+    .back-btn svg{width:12px;height:12px;color:var(--teal);}
+    .toc{margin:14px 14px 0;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+    .toc-title{font-size:9px;font-family:var(--mono);text-transform:uppercase;letter-spacing:0.12em;color:var(--text-dim);margin-bottom:8px;}
+    .toc a{display:block;color:var(--teal);text-decoration:none;font-size:12px;font-family:var(--mono);padding:3px 0;}
+    .sec-title{font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text-dim);font-family:var(--mono);padding:26px 16px 8px;}
+    .sec-title::before{content:'// ';color:var(--teal);opacity:0.6;}
+    .box{margin:0 14px 10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+    .box p{margin-bottom:10px;}
+    .box p:last-child{margin-bottom:0;}
+    .box h3{font-size:13px;color:var(--text-hi);font-weight:600;margin:14px 0 6px;}
+    .box h3:first-child{margin-top:0;}
+    .box ul,.box ol{margin:8px 0 10px 18px;}
+    .box li{margin-bottom:5px;}
+    strong{color:var(--text-hi);}
+    code{font-family:var(--mono);font-size:12px;color:var(--teal);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;word-break:break-all;}
+    pre{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;font-family:var(--mono);font-size:11.5px;line-height:1.65;color:var(--text);margin:8px 0;}
+    pre .cm{color:var(--text-dim);}
+    table{width:100%;border-collapse:collapse;font-size:11.5px;font-family:var(--mono);margin:6px 0;}
+    th{text-align:left;padding:8px 8px 8px 0;color:var(--text-dim);font-weight:400;text-transform:uppercase;letter-spacing:0.06em;font-size:9px;border-bottom:1px solid var(--border);}
+    td{padding:8px 8px 8px 0;border-bottom:1px solid var(--border);vertical-align:top;}
+    tr:last-child td{border-bottom:none;}
+    td:first-child{color:var(--text-hi);padding-right:12px;}
+    .note{border-left:2px solid var(--teal);background:var(--teal-dim);padding:10px 12px;border-radius:0 6px 6px 0;margin:10px 0;font-size:13px;}
+    .note.warn{border-left-color:var(--amber);background:var(--amber-dim);}
+    .note.bad{border-left-color:var(--red);background:var(--red-dim);}
+    .flow{display:flex;flex-direction:column;gap:6px;margin:10px 0;}
+    .step{display:flex;gap:10px;align-items:flex-start;}
+    .step b{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--surface2);border:1px solid var(--teal);color:var(--teal);font-family:var(--mono);font-size:11px;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+    .badge{display:inline-block;font-size:9px;font-family:var(--mono);padding:1px 6px;border-radius:3px;font-weight:700;letter-spacing:0.04em;white-space:nowrap;}
+    .b-ok{background:rgba(126,203,53,0.12);color:var(--green);border:1px solid rgba(126,203,53,0.25);}
+    .b-warn{background:rgba(245,166,35,0.1);color:var(--amber);border:1px solid rgba(245,166,35,0.25);}
+    .b-bad{background:rgba(224,92,92,0.1);color:var(--red);border:1px solid rgba(224,92,92,0.25);}
+    .b-dim{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border2);}
+    .b-teal{background:rgba(45,212,191,0.1);color:var(--teal);border:1px solid rgba(45,212,191,0.3);}
+    .b-purple{background:rgba(176,127,255,0.1);color:var(--purple);border:1px solid rgba(176,127,255,0.25);}
+    .footer{text-align:center;padding:24px 16px 8px;font-size:10px;font-family:var(--mono);color:var(--text-dim);}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <g class="ring">
+          <path d="M12 1.6a10.4 10.4 0 0 1 9.6 6.4" stroke="var(--teal)" stroke-width="1.5"/>
+          <path d="M21.2 6.2l.5 2-2-.4" stroke="var(--teal)" stroke-width="1.5"/>
+          <path d="M12 22.4a10.4 10.4 0 0 1-9.6-6.4" stroke="var(--teal)" stroke-width="1.5" opacity="0.55"/>
+          <path d="M2.8 17.8l-.5-2 2 .4" stroke="var(--teal)" stroke-width="1.5" opacity="0.55"/>
+        </g>
+        <path d="M12 5.2l5 1.9v4.1c0 3.3-2.1 5.7-5 6.8-2.9-1.1-5-3.5-5-6.8V7.1z" stroke="var(--teal)" stroke-width="1.6" fill="#0f2a26"/>
+        <path d="M9.6 11.5l1.7 1.7 3.2-3.3" stroke="var(--text-hi)" stroke-width="1.6"/>
+      </svg>
+    </div>
+    <div>
+      <div class="header-title">Bootloop Protector</div>
+      <div class="header-sub">help &amp; documentation</div>
+    </div>
+  </div>
+  <button class="back-btn" onclick="goBack()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    BACK
+  </button>
+</div>
+
+<div class="toc">
+  <div class="toc-title">contents</div>
+  <a href="#what">What it does</a>
+  <a href="#detect">What it detects</a>
+  <a href="#smart">Smart rescue</a>
+  <a href="#badges">Module badges</a>
+  <a href="#never">Never disable</a>
+  <a href="#hand">Rescue by hand</a>
+  <a href="#after">After a rescue</a>
+  <a href="#settings">Settings</a>
+  <a href="#card">Status on the module card</a>
+  <a href="#files">Files</a>
+  <a href="#commands">Commands</a>
+  <a href="#limits">Limits</a>
+</div>
+
+<div class="sec-title" id="what">what it does</div>
+<div class="box">
+  <p>Bootloop Protector watches every boot. When a module or a general script stops the phone
+  from starting, crashes the system again and again, or breaks SystemUI, it switches off
+  the cause and reboots, so you get a working phone back without a computer or a recovery.</p>
+  <p>It does this on its own. There is nothing to press - the volume keys are only an extra
+  option for when you want to start a rescue yourself.</p>
+  <p>Works with <strong>KernelSU</strong>, <strong>SukiSU Ultra</strong>, <strong>APatch</strong> and
+  <strong>Magisk</strong>. It needs no internet and no other module.</p>
+</div>
+
+<div class="sec-title" id="detect">what it detects</div>
+<div class="box">
+  <table>
+    <tr><th>problem</th><th>how it is caught</th></tr>
+    <tr><td>Boot loop</td><td>The phone restarts before the boot finishes. Every boot is counted; after 3 failed boots in a row (setting) the 4th boot starts a rescue.</td></tr>
+    <tr><td>Stuck boot</td><td>The boot animation never ends. After the boot timeout (180 s) the phone is rebooted and the boot counts as failed.</td></tr>
+    <tr><td>Zygote crash loop</td><td>The boot animation starts over without a real reboot. 4 zygote restarts during boot start a rescue at once.</td></tr>
+    <tr><td>Soft reboot loop</td><td>After the boot, zygote restarts 4 times within 5 minutes. A single soft reboot (done by hand or by an app) is normal and only gives SystemUI 90 s to come back.</td></tr>
+    <tr><td>SystemUI failure</td><td>SystemUI restarts 3 times within 60 s, or stays down for 30 s. Can be switched off.</td></tr>
+  </table>
+  <p class="note">The real zygote is told apart from its freshly started children (which briefly carry
+  the same name), so starting apps never looks like a crash.</p>
+</div>
+
+<div class="sec-title" id="smart">smart rescue</div>
+<div class="box">
+  <h3>Trusted setup</h3>
+  <p>After a good boot the protector records every enabled module and executable general script
+  with a fingerprint (version, boot scripts, <code>system.prop</code>, <code>sepolicy.rule</code>
+  and the files it adds to the system). When the phone has run <strong>10 minutes</strong>
+  without problems (setting), that record becomes the <strong>trusted setup</strong>.</p>
+  <h3>Two levels</h3>
+  <div class="flow">
+    <div class="step"><b>1</b><div><strong>Level 1</strong> switches off only what is <strong>new or changed</strong> since the trusted setup - a module you just flashed or updated, or a new script. Almost every boot loop comes from exactly that.</div></div>
+    <div class="step"><b>2</b><div>If the problem comes back, <strong>level 2</strong> switches off every module and general script, except the ones set to <em>Never disable</em>.</div></div>
+    <div class="step"><b>✕</b><div>If even that does not help, the problem is not caused by modules. The protector <strong>gives up</strong> and stops rebooting, so it can never become the reason for a loop itself.</div></div>
+  </div>
+  <p class="note warn">Without a trusted setup yet (right after installing) or when nothing changed,
+  a rescue goes straight to level 2.</p>
+  <p>The protector never switches itself off and remembers exactly what each rescue disabled.</p>
+</div>
+
+<div class="sec-title" id="badges">module badges</div>
+<div class="box">
+  <table>
+    <tr><td><span class="badge b-ok">TRUSTED</span></td><td>Part of the trusted setup and unchanged.</td></tr>
+    <tr><td><span class="badge b-warn">NEW</span></td><td>Not in the trusted setup. First suspect of a level 1 rescue.</td></tr>
+    <tr><td><span class="badge b-warn">UPDATED</span></td><td>In the trusted setup, but changed since. Also a first suspect.</td></tr>
+    <tr><td><span class="badge b-dim">LEARNING</span></td><td>No trusted setup recorded yet.</td></tr>
+    <tr><td><span class="badge b-purple">REBOOT PENDING</span></td><td>Installed or updated, active after the next reboot.</td></tr>
+    <tr><td><span class="badge b-bad">DISABLED BY RESCUE</span></td><td>Switched off by the protector. Restore brings it back.</td></tr>
+    <tr><td><span class="badge b-dim">DISABLED</span></td><td>Switched off by you.</td></tr>
+    <tr><td><span class="badge b-teal">KEPT ON RESCUE</span></td><td>Set to Never disable.</td></tr>
+  </table>
+</div>
+
+<div class="sec-title" id="never">never disable</div>
+<div class="box">
+  <p>The <strong>Never disable</strong> switch next to each module and script keeps it running in every
+  rescue, also on level 2. Use it for things the phone should always have, like a metamodule,
+  susfs or a VPN module.</p>
+  <p class="note warn">If a module set to Never disable is the cause, the protector cannot fix the loop
+  and gives up. Switch it on only for modules you trust.</p>
+  <p>The lists are plain text files, one name per line:
+  <code>/data/adb/bootloop-protector/allowed-modules.txt</code> (module ids) and
+  <code>/data/adb/bootloop-protector/allowed-scripts.txt</code> (script file names).</p>
+</div>
+
+<div class="sec-title" id="hand">rescue by hand</div>
+<div class="box">
+  <h3>Volume Up × 3</h3>
+  <p>Press <strong>Volume Up 3 times during the boot animation</strong>. The protector runs a level 1
+  rescue (or level 2 when nothing is new) and reboots. Handy when something is wrong that the
+  protector does not see, like a module that makes the phone unusable but does not crash it.</p>
+  <p class="note">Volume Down is left alone on purpose: KernelSU and SukiSU use Volume Down × 3 for
+  their own safe mode.</p>
+  <h3>From the WebUI</h3>
+  <p><strong>Disable all modules</strong> works like a level 2 rescue, so <strong>Restore all</strong>
+  brings everything back.</p>
+  <h3>From recovery</h3>
+  <p>If the phone cannot get far enough to run the protector at all, flash the
+  <strong>module zip in TWRP</strong> (or another custom recovery). It does not install anything there -
+  it switches off all modules and general scripts and records them, so Restore works after the boot.
+  <code>/data</code> must be decrypted.</p>
+</div>
+
+<div class="sec-title" id="after">after a rescue</div>
+<div class="box">
+  <p>The Status tab shows a red <strong>Rescue happened</strong> section with the time, the reason and
+  everything that was switched off.</p>
+  <ul>
+    <li><strong>Restore all</strong> - switches everything back on. Use it after you removed or fixed the bad module, or to test again. If the problem comes back, the protector catches it again.</li>
+    <li><strong>Keep disabled</strong> - closes the rescue; the items stay off until you switch them on in the root manager.</li>
+  </ul>
+  <p>The <strong>Action</strong> button on the module card does the same as Restore all. Without a
+  rescue it shows the status and the last log lines.</p>
+  <p class="note">While a rescue waits for your choice, the setup is not trusted - otherwise the switched
+  off modules would look new after a restore.</p>
+</div>
+
+<div class="sec-title" id="settings">settings</div>
+<div class="box">
+  <p>All settings apply from the next boot.</p>
+  <table>
+    <tr><th>setting</th><th>default</th><th>meaning</th></tr>
+    <tr><td>Failed boots before a rescue</td><td>3</td><td>Boots in a row that did not finish. Lower reacts faster, higher forgives a random reboot.</td></tr>
+    <tr><td>Boot timeout</td><td>180 s</td><td>A boot slower than this counts as failed. Keep it well above your normal boot time.</td></tr>
+    <tr><td>Zygote restarts = loop</td><td>4</td><td>During boot, or soft reboots within 5 minutes after it.</td></tr>
+    <tr><td>Minutes until trusted</td><td>10</td><td>How long a new setup must run cleanly before it is trusted.</td></tr>
+    <tr><td>SystemUI monitor</td><td>on</td><td>Rescue when SystemUI crash loops or stays down.</td></tr>
+    <tr><td>Volume Up rescue</td><td>on</td><td>Vol+ × 3 during the boot animation.</td></tr>
+  </table>
+  <p>They live in <code>/data/adb/bootloop-protector/config</code>.</p>
+</div>
+
+<div class="sec-title" id="card">status on the module card</div>
+<div class="box">
+  <table>
+    <tr><td>🛡️ Armed | … | Setup trusted 🟢</td><td>All good.</td></tr>
+    <tr><td>Learning setup 🟡</td><td>Waiting for the setup to become trusted.</td></tr>
+    <tr><td>⏳ Booting…</td><td>The boot is running (shows the attempt number).</td></tr>
+    <tr><td>⚠️ Rescued …</td><td>A rescue switched things off. Tap Action to restore.</td></tr>
+    <tr><td>❌ Gave up</td><td>The problem is not caused by modules. Check the log.</td></tr>
+  </table>
+</div>
+
+<div class="sec-title" id="files">files</div>
+<div class="box">
+  <p>Everything is in one folder, <code>/data/adb/bootloop-protector</code>, and survives module updates.
+  Uninstalling the module removes it.</p>
+  <table>
+    <tr><td>config</td><td>settings</td></tr>
+    <tr><td>allowed-modules.txt</td><td>modules set to Never disable</td></tr>
+    <tr><td>allowed-scripts.txt</td><td>scripts set to Never disable</td></tr>
+    <tr><td>bp.log</td><td>log, rotated at 512 KB (bp.log.old)</td></tr>
+    <tr><td>state/</td><td>boot counter, trusted setup, rescue records</td></tr>
+  </table>
+</div>
+
+<div class="sec-title" id="commands">commands</div>
+<div class="box">
+  <p>Everything the WebUI does also works from a root terminal:</p>
+<pre><span class="cm"># status</span>
+su -c 'sh /data/adb/modules/bootloop-protector/bp.sh status'
+
+<span class="cm"># modules with their badges</span>
+su -c 'sh /data/adb/modules/bootloop-protector/bp.sh modules'
+
+<span class="cm"># bring back what the last rescue disabled</span>
+su -c 'sh /data/adb/modules/bootloop-protector/bp.sh restore'
+
+<span class="cm"># trust the current setup right away</span>
+su -c 'sh /data/adb/modules/bootloop-protector/bp.sh trust-now'
+
+<span class="cm"># never disable a module</span>
+su -c 'sh /data/adb/modules/bootloop-protector/bp.sh allow-module MODULE_ID 1'
+
+<span class="cm"># change a setting</span>
+su -c 'sh /data/adb/modules/bootloop-protector/bp.sh set-conf BOOT_TIMEOUT 120'
+
+<span class="cm"># read the log</span>
+su -c 'cat /data/adb/bootloop-protector/bp.log'</pre>
+  <p>Run <code>bp.sh</code> without arguments for the full list.</p>
+</div>
+
+<div class="sec-title" id="limits">limits</div>
+<div class="box">
+  <ul>
+    <li>A module that breaks the phone before the root manager runs any script (for example a broken kernel or boot image) cannot be caught - flash the zip in recovery.</li>
+    <li>A hard boot loop needs the failed boots to happen first, because the phone restarts before anything can react. Lower <em>Failed boots before a rescue</em> for a faster reaction.</li>
+    <li>Changes made directly to the system partition, outside of modules, are not undone.</li>
+    <li>Problems that are not caused by modules or scripts end in <em>Gave up</em>, so the protector never keeps rebooting on its own.</li>
+  </ul>
+</div>
+
+<div class="footer">bootloop-protector</div>
+
+<script>
+// Go back in the history, so the phone's back arrow does not return to this page
+function goBack() {
+  if (history.length > 1) history.back();
+  else location.replace('index.html');
+}
+</script>
+</body>
+</html>

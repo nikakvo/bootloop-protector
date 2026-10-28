@@ -1,0 +1,4 @@
+# Allowed modules - /data/adb/bootloop-protector/allowed-modules.txt
+# Modules listed here are never disabled by a rescue.
+# One module id per line (the folder name in /data/adb/modules).
+# Lines starting with # are ignored.

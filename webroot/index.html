@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Bootloop Protector</title>
+  <style>
+    :root {
+      --bg:#080a0a;--bg2:#0c0f0f;--surface:#111515;--surface2:#171c1c;
+      --border:#1f2727;--border2:#2b3535;
+      --teal:#2dd4bf;--teal-dim:#2dd4bf30;
+      --amber:#f5a623;--amber-dim:#f5a62330;
+      --green:#7ecb35;--green-dim:#7ecb3530;--red:#e05c5c;--red-dim:#e05c5c30;
+      --cyan:#4ecdc4;--purple:#b07fff;--purple-dim:#b07fff30;
+      --text:#a9b8b4;--text-dim:#52605d;--text-hi:#e6f0ee;
+      --mono:ui-monospace,'IBM Plex Mono','Roboto Mono',Menlo,Consolas,monospace;
+      --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    html,body{height:100%;}
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;flex-direction:column;overflow:hidden;
+      padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);}
+
+    /* ── HEADER ── */
+    .header{background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 16px;padding-top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+    .header-left{display:flex;align-items:center;gap:10px;min-width:0;}
+    .logo{width:38px;height:38px;background:linear-gradient(135deg,#0f2220,#081010);border:1px solid var(--teal);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;animation:glow 3s ease-in-out infinite;}
+    .logo svg{width:26px;height:26px;overflow:visible;}
+    .logo .ring{transform-origin:12px 12px;animation:spin 6s linear infinite;}
+    .logo .core{transform-origin:12px 12px;animation:breathe 3s ease-in-out infinite;}
+    @keyframes glow{0%,100%{box-shadow:0 0 8px var(--teal-dim)}50%{box-shadow:0 0 16px #2dd4bf55}}
+    @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .header-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .header-sub{font-size:10px;color:var(--text-dim);font-family:var(--mono);margin-top:2px;}
+    .help-btn{background:transparent;border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:7px 11px;font-size:11px;font-family:var(--mono);cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:5px;}
+    .help-btn:active{opacity:0.5;}
+    .help-btn svg{width:13px;height:13px;color:var(--teal);}
+
+    /* ── STATUS (always visible) ── */
+    .top{flex-shrink:0;}
+    .status-bar{margin:12px 14px 0;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    .status-bar.bad{border-color:rgba(224,92,92,0.4);background:linear-gradient(135deg,#1a1111,#111515);}
+    .status-bar.warn{border-color:rgba(245,166,35,0.35);}
+    .status-bar.ok{border-color:rgba(126,203,53,0.3);}
+    .status-left{display:flex;align-items:center;gap:10px;min-width:0;}
+    .dot{width:9px;height:9px;border-radius:50%;background:var(--text-dim);flex-shrink:0;}
+    .dot.running{background:var(--green);box-shadow:0 0 6px var(--green-dim);animation:pulse 2s infinite;}
+    .dot.warn{background:var(--amber);box-shadow:0 0 6px var(--amber-dim);}
+    .dot.bad{background:var(--red);box-shadow:0 0 6px var(--red-dim);animation:pulse 1.2s infinite;}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.45}}
+    .status-text{color:var(--text-hi);font-size:13px;font-weight:700;}
+    .status-meta{font-size:10px;font-family:var(--mono);color:var(--text-dim);margin-top:2px;}
+    .refresh-btn{background:transparent;border:1px solid var(--border2);border-radius:5px;color:var(--text-dim);padding:5px 10px;font-size:11px;cursor:pointer;font-family:var(--mono);flex-shrink:0;}
+    .refresh-btn:active{opacity:0.6;}
+    .progress{height:3px;background:var(--surface2);border-radius:3px;margin:7px 14px 0;overflow:hidden;display:none;}
+    .progress div{height:100%;width:0;background:var(--amber);transition:width .6s;}
+    .chips{display:flex;flex-wrap:wrap;gap:6px;margin:9px 14px 0;}
+    .chip{font-size:9px;font-family:var(--mono);padding:3px 8px;border-radius:4px;background:var(--surface2);border:1px solid var(--border2);color:var(--text-dim);}
+    .chip b{color:var(--teal);font-weight:600;}
+    .chip b.off{color:var(--text-dim);}
+    .chip b.bad{color:var(--red);}
+
+    /* ── TABS ── */
+    .tabs{display:flex;gap:6px;margin:12px 14px 0;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:11px;flex-shrink:0;}
+    .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 2px 6px;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text-dim);font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:0.06em;cursor:pointer;position:relative;transition:all .2s;}
+    .tab svg{width:17px;height:17px;}
+    .tab.active{background:rgba(45,212,191,0.12);border-color:rgba(45,212,191,0.4);color:var(--teal);box-shadow:0 0 10px rgba(45,212,191,0.12);}
+    .tab .tdot{position:absolute;top:5px;right:calc(50% - 16px);width:7px;height:7px;border-radius:50%;display:none;}
+    .tab .tdot.bad{display:block;background:var(--red);box-shadow:0 0 6px var(--red-dim);}
+    .tab .tdot.warn{display:block;background:var(--amber);}
+
+    main{flex:1;min-height:0;position:relative;margin-top:4px;}
+    .pane{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 28px);display:none;}
+    .pane.active{display:block;animation:fade .2s ease;}
+    @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+    .section-title{display:flex;align-items:center;justify-content:space-between;font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:var(--text-dim);font-family:var(--mono);padding:16px 16px 8px;}
+    .section-title span::before{content:'// ';color:var(--teal);opacity:0.6;}
+    .section-title em{font-style:normal;letter-spacing:0.04em;text-transform:none;}
+
+    /* ── RESCUE ── */
+    .rescue{margin:12px 14px 0;background:linear-gradient(135deg,#1d1212,#121010);border:1px solid rgba(224,92,92,0.4);border-radius:10px;padding:14px;display:none;}
+    .rescue-head{display:flex;align-items:center;gap:8px;color:var(--red);font-weight:700;font-size:13px;}
+    .rescue-head svg{width:18px;height:18px;flex-shrink:0;}
+    .rescue-meta{font-family:var(--mono);font-size:10px;color:var(--text);margin-top:6px;line-height:1.7;}
+    .rescue-meta b{color:var(--text-dim);font-weight:400;display:inline-block;width:52px;}
+    .rescue-items{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;}
+    .rescue-items span{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:4px;background:var(--red-dim);border:1px solid rgba(224,92,92,0.3);color:var(--text-hi);}
+    .rescue-btns{display:flex;gap:8px;margin-top:12px;}
+
+    /* ── CARDS ── */
+    .cards{padding:0 14px;display:flex;flex-direction:column;gap:8px;}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;transition:border-color .3s;}
+    .card.loading{opacity:0.6;pointer-events:none;}
+    .card.st-rescued{border-color:rgba(224,92,92,0.35);}
+    .card.st-new,.card.st-changed{border-color:rgba(245,166,35,0.3);}
+    .card.st-keep{border-color:rgba(45,212,191,0.28);}
+    .card-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--surface2);border:1px solid var(--border);}
+    .card-icon svg{width:17px;height:17px;}
+    .card-body{flex:1;min-width:0;}
+    .card-name{font-size:13.5px;font-weight:600;color:var(--text-hi);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .card-key{font-size:10px;font-family:var(--mono);color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .card-key.wrap{white-space:normal;line-height:1.45;}
+    .badge{display:inline-block;font-size:9px;font-family:var(--mono);padding:1px 6px;border-radius:3px;margin-top:5px;font-weight:700;letter-spacing:0.04em;}
+    .badge.ok{background:rgba(126,203,53,0.12);color:var(--green);border:1px solid rgba(126,203,53,0.25);}
+    .badge.warn{background:rgba(245,166,35,0.1);color:var(--amber);border:1px solid rgba(245,166,35,0.25);}
+    .badge.bad{background:rgba(224,92,92,0.1);color:var(--red);border:1px solid rgba(224,92,92,0.25);}
+    .badge.dim{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border2);}
+    .badge.teal{background:rgba(45,212,191,0.1);color:var(--teal);border:1px solid rgba(45,212,191,0.3);}
+    .badge.purple{background:rgba(176,127,255,0.1);color:var(--purple);border:1px solid rgba(176,127,255,0.25);}
+    .badge + .badge{margin-left:4px;}
+
+    /* info rows inside a card */
+    .info{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin:0 14px;padding:4px 14px;}
+    .irow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;font-family:var(--mono);}
+    .irow:last-child{border-bottom:none;}
+    .irow .k{color:var(--text-dim);display:flex;align-items:center;gap:7px;white-space:nowrap;}
+    .irow .k svg{width:14px;height:14px;}
+    .irow .v{color:var(--teal);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .v.ok{color:var(--green);} .v.warn{color:var(--amber);} .v.bad{color:var(--red);} .v.dim{color:var(--text-dim);}
+
+    .toggle-wrap{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:3px;}
+    .toggle-cap{font-size:8px;font-family:var(--mono);color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;}
+    .toggle{position:relative;width:46px;height:26px;display:inline-block;}
+    .toggle input{opacity:0;width:0;height:0;}
+    .slider{position:absolute;inset:0;background:var(--surface2);border:1px solid var(--border2);border-radius:26px;cursor:pointer;transition:all .25s;}
+    .slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:var(--text-dim);border-radius:50%;transition:all .25s;}
+    input:checked+.slider{background:rgba(126,203,53,0.15);border-color:rgba(126,203,53,0.4);}
+    input:checked+.slider::before{transform:translateX(20px);background:var(--green);box-shadow:0 0 8px var(--green-dim);}
+    .spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--teal);border-radius:50%;animation:spin .6s linear infinite;display:none;flex-shrink:0;}
+    .card.loading .spinner{display:block;}
+    .card.loading .toggle-wrap,.card.loading .stepper{display:none;}
+    .lock{font-size:9px;font-family:var(--mono);color:var(--teal);flex-shrink:0;}
+
+    .legend{margin:0 14px 8px;font-size:10px;font-family:var(--mono);color:var(--text-dim);line-height:1.6;}
+    .legend b{color:var(--green);font-weight:600;}
+    .empty{margin:0 14px;padding:14px;text-align:center;font-family:var(--mono);font-size:10px;color:var(--text-dim);background:var(--surface);border:1px dashed var(--border2);border-radius:10px;}
+
+    /* ── STEPPER ── */
+    .stepper{display:flex;align-items:center;flex-shrink:0;border:1px solid var(--border2);border-radius:7px;overflow:hidden;}
+    .stepper button{width:30px;height:30px;background:var(--surface2);border:none;color:var(--teal);font-size:16px;font-family:var(--mono);cursor:pointer;}
+    .stepper button:active{background:var(--border2);}
+    .stepper span{min-width:54px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--text-hi);padding:0 4px;}
+
+    /* ── BUTTONS ── */
+    .actions{padding:0 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .action-btn{display:flex;align-items:center;gap:9px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;text-align:left;line-height:1.35;transition:all .15s;}
+    .action-btn svg{width:17px;height:17px;flex-shrink:0;}
+    .action-btn:active{opacity:0.5;}
+    .action-btn.green{border-color:rgba(126,203,53,0.35);color:var(--green);background:linear-gradient(135deg,rgba(126,203,53,0.07),var(--surface));}
+    .action-btn.amber{border-color:rgba(245,166,35,0.35);color:var(--amber);background:linear-gradient(135deg,rgba(245,166,35,0.07),var(--surface));}
+    .action-btn.red{border-color:rgba(224,92,92,0.35);color:var(--red);background:linear-gradient(135deg,rgba(224,92,92,0.07),var(--surface));}
+    .action-btn.purple{border-color:rgba(176,127,255,0.35);color:var(--purple);background:linear-gradient(135deg,rgba(176,127,255,0.07),var(--surface));}
+    .action-btn.teal{border-color:rgba(45,212,191,0.35);color:var(--teal);background:linear-gradient(135deg,rgba(45,212,191,0.07),var(--surface));}
+    .action-btn.wide{grid-column:1 / -1;justify-content:center;}
+    .action-btn.arm,.rbtn.arm{border-color:var(--amber) !important;color:#fff !important;background:rgba(245,166,35,0.18) !important;}
+    .action-btn.working,.rbtn.working{animation:pulse .9s ease-in-out infinite;pointer-events:none;}
+    .rbtn{flex:1;padding:10px 8px;border-radius:8px;font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:0.06em;cursor:pointer;background:var(--surface);}
+    .rbtn.restore{border:1px solid rgba(126,203,53,0.45);color:var(--green);background:linear-gradient(135deg,rgba(126,203,53,0.1),var(--surface));}
+    .rbtn.keep{border:1px solid var(--border2);color:var(--text);}
+    .rbtn:active{opacity:0.5;}
+
+    /* ── LOG ── */
+    #pane-log.active{display:flex;flex-direction:column;overflow:hidden;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 10px);}
+    .log-wrap{margin:12px 14px 0;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;flex:1;min-height:0;}
+    .log-bar{padding:9px 12px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex-shrink:0;}
+    .fbtn{padding:3px 8px;background:transparent;border:1px solid var(--border2);border-radius:4px;font-family:var(--mono);font-size:9px;font-weight:700;cursor:pointer;color:var(--text-dim);}
+    .fbtn.active{background:var(--teal-dim);border-color:rgba(45,212,191,0.4);color:var(--teal);}
+    .fbtn.danger{color:var(--red);border-color:rgba(224,92,92,0.3);}
+    .fbtn.danger.arm{background:var(--red-dim);color:#fff;border-color:var(--red);}
+    .fbtn:active{opacity:0.5;}
+    .log-size{font-size:9px;font-family:var(--mono);color:var(--text-dim);margin-left:auto;}
+    .log-body{font-family:var(--mono);font-size:10px;line-height:1.7;padding:9px 12px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+    .log-line{display:block;white-space:pre-wrap;word-break:break-word;color:var(--text);}
+    .log-line .ts{color:var(--text-dim);}
+    .log-line.bad{color:var(--red);}
+    .log-line.warn{color:var(--amber);}
+    .log-line.good{color:var(--green);}
+    .log-line.boot{color:var(--cyan);}
+    .log-line.dim{color:var(--text-dim);}
+    .log-empty{color:var(--text-dim);font-size:10px;text-align:center;display:block;padding:20px 0;}
+
+    .note{margin:10px 14px 0;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:10px;font-family:var(--mono);color:var(--text-dim);line-height:1.6;}
+    .note b{color:var(--text);font-weight:600;}
+
+    .toast{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 18px;font-size:12.5px;color:var(--text-hi);opacity:0;transition:all .25s;pointer-events:none;max-width:calc(100% - 32px);text-align:center;z-index:100;}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+    .toast.ok{border-color:rgba(126,203,53,0.35);color:var(--green);}
+    .toast.err{border-color:rgba(224,92,92,0.35);color:var(--red);}
+    .footer{text-align:center;padding:20px 16px 4px;font-size:10px;font-family:var(--mono);color:var(--text-dim);line-height:1.7;}
+    .fatal{margin:40px 14px;padding:18px;background:var(--red-dim);border:1px solid rgba(224,92,92,0.35);border-radius:10px;color:var(--red);font-family:var(--mono);font-size:11px;line-height:1.7;}
+    body.locked .action-btn:not(.working),body.locked .rbtn:not(.working){opacity:.5;}
+    @media (prefers-reduced-motion:reduce){.logo,.logo .ring,.logo .core,.dot.running,.dot.bad,.pane.active{animation:none;}}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <g class="ring">
+          <path d="M12 1.6a10.4 10.4 0 0 1 9.6 6.4" stroke="var(--teal)" stroke-width="1.5"/>
+          <path d="M21.2 6.2l.5 2-2-.4" stroke="var(--teal)" stroke-width="1.5"/>
+          <path d="M12 22.4a10.4 10.4 0 0 1-9.6-6.4" stroke="var(--teal)" stroke-width="1.5" opacity="0.55"/>
+          <path d="M2.8 17.8l-.5-2 2 .4" stroke="var(--teal)" stroke-width="1.5" opacity="0.55"/>
+        </g>
+        <g class="core">
+          <path d="M12 5.2l5 1.9v4.1c0 3.3-2.1 5.7-5 6.8-2.9-1.1-5-3.5-5-6.8V7.1z" stroke="var(--teal)" stroke-width="1.6" fill="#0f2a26"/>
+          <path d="M9.6 11.5l1.7 1.7 3.2-3.3" stroke="var(--text-hi)" stroke-width="1.6"/>
+        </g>
+      </svg>
+    </div>
+    <div>
+      <div class="header-title">Bootloop Protector</div>
+      <div class="header-sub" id="headerSub">loading…</div>
+    </div>
+  </div>
+  <button class="help-btn" onclick="openHelp()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+    HELP
+  </button>
+</div>
+
+<div class="top">
+  <div class="status-bar" id="statusBar">
+    <div class="status-left">
+      <div class="dot" id="dot"></div>
+      <div>
+        <div class="status-text" id="statusText">checking…</div>
+        <div class="status-meta" id="statusMeta">-</div>
+      </div>
+    </div>
+    <button class="refresh-btn" onclick="refreshAll()">↻ refresh</button>
+  </div>
+  <div class="progress" id="trustBar"><div id="trustFill"></div></div>
+  <div class="chips">
+    <div class="chip">boot <b id="chipBoot">-</b></div>
+    <div class="chip">modules <b id="chipMods">-</b></div>
+    <div class="chip">zygote <b id="chipZygote">-</b></div>
+    <div class="chip">systemui <b id="chipUi">-</b></div>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="dash" onclick="showTab('dash')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.4 8.7-8 11-4.6-2.3-8-6-8-11V5z"/></svg>
+      Status<span class="tdot" id="dot-dash"></span>
+    </button>
+    <button class="tab" data-tab="mods" onclick="showTab('mods')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 7h-3V4a1 1 0 0 0-1-1h-3v1.5a1.5 1.5 0 0 1-3 0V3H7a1 1 0 0 0-1 1v3H4.5a1.5 1.5 0 0 0 0 3H6v3H4.5a1.5 1.5 0 0 0 0 3H6v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1z"/></svg>
+      Modules<span class="tdot" id="dot-mods"></span>
+    </button>
+    <button class="tab" data-tab="set" onclick="showTab('set')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2" fill="var(--bg)"/><circle cx="15" cy="12" r="2" fill="var(--bg)"/><circle cx="7" cy="18" r="2" fill="var(--bg)"/></svg>
+      Settings
+    </button>
+    <button class="tab" data-tab="log" onclick="showTab('log')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      Log
+    </button>
+  </nav>
+</div>
+
+<main>
+  <!-- ═════════════ STATUS ═════════════ -->
+  <div class="pane active" id="pane-dash">
+    <div class="rescue" id="rescue">
+      <div class="rescue-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span id="rescueTitle">Rescue happened</span>
+      </div>
+      <div class="rescue-meta" id="rescueMeta"></div>
+      <div class="rescue-items" id="rescueItems"></div>
+      <div class="rescue-btns" id="rescueBtns">
+        <button class="rbtn restore" onclick="restoreAll(this)">↺ Restore all</button>
+        <button class="rbtn keep" onclick="keepDisabled(this)">Keep disabled</button>
+      </div>
+    </div>
+
+    <div class="section-title"><span>protection</span></div>
+    <div class="info">
+      <div class="irow"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><path d="M12 2l8 3v6c0 5-3.4 8.7-8 11-4.6-2.3-8-6-8-11V5z"/></svg>Setup</span><span class="v" id="pSetup">-</span></div>
+      <div class="irow"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Failed boots</span><span class="v" id="pAttempts">-</span></div>
+      <div class="irow"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><path d="M12 20V10M6 20V4M18 20v-6"/></svg>Rescue level</span><span class="v" id="pLevel">-</span></div>
+      <div class="irow"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>First suspects</span><span class="v" id="pFresh">-</span></div>
+    </div>
+
+    <div class="section-title"><span>watchers</span></div>
+    <div class="info">
+      <div class="irow"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>Zygote</span><span class="v" id="wZyg">-</span></div>
+      <div class="irow"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="5" x2="15" y2="5"/></svg>SystemUI</span><span class="v" id="wUi">-</span></div>
+      <div class="irow"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>Vol+ rescue</span><span class="v" id="wVol">-</span></div>
+      <div class="irow"><span class="k"><svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg>Uptime</span><span class="v" id="wUp">-</span></div>
+    </div>
+
+    <div class="section-title"><span>actions</span></div>
+    <div class="actions">
+      <button class="action-btn green" onclick="trustNow(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l8 3v6c0 5-3.4 8.7-8 11-4.6-2.3-8-6-8-11V5z"/><polyline points="9 12 11 14 15 10"/></svg>
+        <span>Trust setup<br>now</span>
+      </button>
+      <button class="action-btn amber" onclick="restartUi(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        <span>Restart<br>SystemUI</span>
+      </button>
+      <button class="action-btn red" onclick="disableAll(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>
+        <span>Disable<br>all modules</span>
+      </button>
+      <button class="action-btn purple" onclick="enableAll(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>
+        <span>Enable<br>all modules</span>
+      </button>
+    </div>
+    <div class="note">Tap a button twice to confirm. <b>Disable all</b> works like a level 2 rescue, so Restore all brings everything back. <b>Enable all</b> also switches on modules you turned off yourself. Both need a reboot.</div>
+    <div class="footer" id="footer">bootloop-protector</div>
+  </div>
+
+  <!-- ═════════════ MODULES ═════════════ -->
+  <div class="pane" id="pane-mods">
+    <div class="section-title"><span>modules</span><em id="modCount"></em></div>
+    <div class="legend">Switch on <b>Never disable</b> for modules a rescue must always leave running. The badge shows what the protector knows about each one.</div>
+    <div class="cards" id="modules"><div class="empty">loading…</div></div>
+    <div id="scriptsBlock" style="display:none">
+      <div class="section-title"><span>general scripts</span><em id="scrCount"></em></div>
+      <div class="cards" id="scripts"></div>
+    </div>
+  </div>
+
+  <!-- ═════════════ SETTINGS ═════════════ -->
+  <div class="pane" id="pane-set">
+    <div class="section-title"><span>detection</span><em>apply from the next boot</em></div>
+    <div class="cards" id="setDetect"></div>
+    <div class="section-title"><span>watchers</span><em>apply from the next boot</em></div>
+    <div class="cards" id="setWatch"></div>
+    <div class="note">Volume Down is left alone on purpose: KernelSU and SukiSU use Volume Down × 3 for their own safe mode.</div>
+    <div class="note">All data lives in <b>/data/adb/bootloop-protector</b> (config, allowed-modules.txt, allowed-scripts.txt, bp.log) and survives module updates. Uninstalling the module removes it.</div>
+  </div>
+
+  <!-- ═════════════ LOG ═════════════ -->
+  <div class="pane" id="pane-log">
+    <div class="log-wrap">
+      <div class="log-bar">
+        <button class="fbtn active" id="f-all" onclick="setFilter('all')">ALL</button>
+        <button class="fbtn" id="f-events" onclick="setFilter('events')">EVENTS</button>
+        <button class="fbtn" onclick="loadLog()">↻</button>
+        <button class="fbtn danger" id="logClear" onclick="clearLog(this)">clear</button>
+        <span class="log-size" id="logSize">-</span>
+      </div>
+      <div class="log-body" id="logBody"><span class="log-empty">loading…</span></div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+var BP = '/data/adb/modules/bootloop-protector/bp.sh';
+
+// ── Root bridge ──────────────────────────────────────────────────────────────
+// Callback form ksu.exec(cmd, options, cbName) or the legacy one-argument form.
+var EXEC_MODE = null, _cbSeq = 0;
+function hasBridge() { return typeof ksu !== 'undefined' && ksu && typeof ksu.exec === 'function'; }
+function callbackExec(cmd, timeoutMs) {
+  return new Promise(function (resolve, reject) {
+    var name = '__bp_cb_' + (++_cbSeq) + '_' + Date.now(), settled = false;
+    window[name] = function (errno, stdout, stderr) {
+      if (settled) return; settled = true;
+      try { delete window[name]; } catch (e) { window[name] = undefined; }
+      resolve({ errno: typeof errno === 'number' ? errno : 0, stdout: stdout == null ? '' : String(stdout), stderr: stderr == null ? '' : String(stderr) });
+    };
+    try { ksu.exec(cmd, '{}', name); }
+    catch (e) { settled = true; try { delete window[name]; } catch (e2) {} reject(e); return; }
+    setTimeout(function () { if (settled) return; settled = true; try { delete window[name]; } catch (e) {} reject(new Error('exec timeout')); }, timeoutMs || 60000);
+  });
+}
+function legacyExec(cmd) { var r = ksu.exec(cmd); return { errno: 0, stdout: typeof r === 'string' ? r : (r && r.stdout) || '', stderr: '' }; }
+// A slow first root shell must not push the page into the blocking legacy mode
+async function detectExecMode() {
+  if (!hasBridge()) throw new Error('no root bridge');
+  for (var t of [8000, 15000]) {
+    try { var r = await callbackExec('echo bp_ok', t); if ((r.stdout || '').indexOf('bp_ok') >= 0) return 'callback'; }
+    catch (e) { if (!/timeout/.test(String(e && e.message))) break; }
+  }
+  try { var l = legacyExec('echo bp_ok'); if ((l.stdout || '').indexOf('bp_ok') >= 0) return 'legacy'; } catch (e) {}
+  throw new Error('root shell unavailable');
+}
+// Output is base64-wrapped so multi-line text survives the legacy bridge
+async function sh(cmd, timeoutMs) {
+  var w = '{ ' + cmd + '; } 2>&1 | base64 | tr -d "\\n\\r"';
+  var res = EXEC_MODE === 'callback' ? await callbackExec(w, timeoutMs) : legacyExec(w);
+  var b64 = (res.stdout || '').trim();
+  if (!b64) return '';
+  try { var bin = atob(b64); return new TextDecoder('utf-8').decode(Uint8Array.from(bin, function (c) { return c.charCodeAt(0); })); }
+  catch (e) { return ''; }
+}
+function q(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+function bp(args, timeoutMs) { return sh('sh ' + BP + ' ' + args, timeoutMs); }
+
+// ── One action at a time ─────────────────────────────────────────────────────
+var BUSY = false;
+async function act(btn, cmd, ms) {
+  if (BUSY) { toast('Wait - the previous action is still running', 'err'); return; }
+  BUSY = true; document.body.classList.add('locked');
+  if (btn) btn.classList.add('working');
+  try {
+    var out = (await bp(cmd, ms || 60000)).trim();
+    toast(out.split('\n').pop() || 'Done', 'ok');
+  } finally {
+    if (btn) btn.classList.remove('working');
+    BUSY = false; document.body.classList.remove('locked');
+  }
+  _rescueKey = '';
+  await loadStatus(); await loadModules();
+}
+
+// Tap twice to confirm
+function armed(b, label) {
+  if (b.classList.contains('arm')) { clearTimeout(b._t); b.classList.remove('arm'); b.innerHTML = b._label; return true; }
+  b._label = b.innerHTML; b.classList.add('arm');
+  b.innerHTML = (b.querySelector('svg') ? b.querySelector('svg').outerHTML : '') + '<span>' + label + '</span>';
+  b._t = setTimeout(function () { b.classList.remove('arm'); b.innerHTML = b._label; }, 3000);
+  return false;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+function num(v) { var n = parseInt(v, 10); return isNaN(n) ? 0 : n; }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function parseKV(text) { var o = {}; (text || '').split('\n').forEach(function (l) { var i = l.indexOf('='); if (i > 0) o[l.slice(0, i).trim()] = l.slice(i + 1).trim(); }); return o; }
+function parseRows(text) { return (text || '').split('\n').filter(Boolean).map(function (l) { return l.split('\t'); }); }
+var DEVICE_NOW = 0;
+function fmtDur(sec) {
+  var s = num(sec); if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+  return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
+}
+function fmtAgo(ts) { var t = num(ts); if (!t) return 'never'; var d = Math.max(0, DEVICE_NOW - t); return d < 60 ? 'just now' : fmtDur(d) + ' ago'; }
+function fmtDate(ts) {
+  var t = num(ts); if (t < 1000000000) return 'early boot';
+  var d = new Date(t * 1000), p = function (n) { return (n < 10 ? '0' : '') + n; };
+  return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function fmtBytes(n) { var b = num(n); return b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(2) + ' MB'; }
+var toastTimer;
+function toast(msg, type) { var t = $('toast'); t.textContent = msg; t.className = 'toast show ' + (type || ''); clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'toast'; }, 2800); }
+function setV(id, text, cls) { var e = $(id); e.textContent = text; e.className = 'v' + (cls ? ' ' + cls : ''); }
+function fatal(msg) {
+  document.body.innerHTML = '<div class="fatal"><b>Bootloop Protector</b><br><br>' + esc(msg) +
+    '<br><br>This WebUI needs a root manager that provides the ksu JavaScript bridge - KernelSU, SukiSU, APatch or MMRL.</div>';
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+var currentTab = 'dash';
+function showTab(name) {
+  currentTab = name;
+  document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
+  document.querySelectorAll('.pane').forEach(function (p) { p.classList.toggle('active', p.id === 'pane-' + name); });
+  try { sessionStorage.setItem('bp_tab', name); } catch (e) {}
+  if (name === 'log') loadLog();
+  if (name === 'mods') loadModules();
+}
+
+// ── Status ───────────────────────────────────────────────────────────────────
+var ST = {};
+async function loadStatus() {
+  var st;
+  try { st = parseKV(await bp('status', 20000)); } catch (e) { toast('Status failed: ' + (e.message || e), 'err'); return; }
+  if (!st.now) { toast('bp.sh did not answer', 'err'); return; }
+  ST = st; DEVICE_NOW = num(st.now);
+  $('headerSub').textContent = (st.version || 'v?') + ' · up ' + fmtDur(st.uptime);
+
+  var items = num(st.rescue_items), gave = st.gaveup === '1', booted = st.boot_completed === '1', trusted = st.trusted === '1';
+  var bar = $('statusBar'), dot = $('dot'), txt = $('statusText'), meta = $('statusMeta');
+  $('trustBar').style.display = 'none';
+  if (gave) {
+    bar.className = 'status-bar bad'; dot.className = 'dot bad';
+    txt.textContent = 'Gave up'; txt.style.color = 'var(--red)';
+    meta.textContent = 'the boot problem is not caused by modules';
+  } else if (items) {
+    bar.className = 'status-bar bad'; dot.className = 'dot bad';
+    txt.textContent = 'Rescued - ' + items + ' item' + (items > 1 ? 's' : '') + ' disabled'; txt.style.color = 'var(--red)';
+    meta.textContent = 'restore them or keep them disabled below';
+  } else if (!booted) {
+    bar.className = 'status-bar warn'; dot.className = 'dot warn';
+    txt.textContent = 'Booting…'; txt.style.color = 'var(--amber)';
+    meta.textContent = 'attempt ' + st.attempts + ' of ' + st.max_attempts;
+  } else if (trusted) {
+    bar.className = 'status-bar ok'; dot.className = 'dot running';
+    txt.textContent = 'Protected'; txt.style.color = 'var(--green)';
+    meta.textContent = 'setup trusted ' + fmtAgo(st.trusted_time);
+  } else {
+    bar.className = 'status-bar warn'; dot.className = 'dot warn';
+    txt.textContent = 'Learning your setup'; txt.style.color = 'var(--amber)';
+    var need = num(st.trust_minutes || 10) * 60 + 80, up = num(st.uptime), left = Math.max(0, need - up);
+    meta.textContent = left > 0 ? 'trusted in about ' + fmtDur(left) : 'trusting soon';
+    $('trustBar').style.display = 'block';
+    $('trustFill').style.width = Math.min(100, Math.round(100 * up / need)) + '%';
+  }
+
+  $('chipBoot').textContent = booted ? 'ok' : st.attempts + '/' + st.max_attempts;
+  $('chipBoot').className = booted ? '' : 'bad';
+  $('chipZygote').textContent = st.zygote_pid || 'down';
+  $('chipZygote').className = st.zygote_pid ? '' : 'bad';
+  var uiOn = st.systemui_monitor === '1';
+  $('chipUi').textContent = uiOn ? (st.systemui_pid || 'down') : 'off';
+  $('chipUi').className = uiOn ? (st.systemui_pid ? '' : 'bad') : 'off';
+
+  setV('pSetup', trusted ? 'trusted ' + fmtAgo(st.trusted_time) : 'learning', trusted ? 'ok' : 'warn');
+  setV('pAttempts', num(st.attempts) > 1 ? (num(st.attempts) - 1) + ' of ' + st.max_attempts : '0 of ' + st.max_attempts, num(st.attempts) > 1 ? 'warn' : 'ok');
+  setV('pLevel', num(st.level) ? 'level ' + st.level + ' used' : 'none', num(st.level) ? 'warn' : 'dim');
+  setV('wZyg', st.zygote_pid ? 'watched · pid ' + st.zygote_pid : 'down', st.zygote_pid ? '' : 'bad');
+  setV('wUi', uiOn ? (st.systemui_pid ? 'watched · pid ' + st.systemui_pid : 'down') : 'not watched', uiOn ? (st.systemui_pid ? '' : 'bad') : 'dim');
+  setV('wVol', st.volkey === '1' ? 'on · Vol+ × 3 at boot' : 'off', st.volkey === '1' ? '' : 'dim');
+  setV('wUp', fmtDur(st.uptime), '');
+  $('logSize').textContent = fmtBytes(st.log_size);
+  $('dot-dash').className = 'tdot' + (gave || items ? ' bad' : !trusted && booted ? ' warn' : '');
+  renderRescue(st);
+}
+
+var _rescueKey = '';
+async function renderRescue(st) {
+  var box = $('rescue'), items = num(st.rescue_items), gave = st.gaveup === '1';
+  if (!gave && !items) { box.style.display = 'none'; _rescueKey = ''; return; }
+  box.style.display = 'block';
+  if (gave && !items) {
+    $('rescueTitle').textContent = 'Gave up';
+    $('rescueMeta').innerHTML = 'Both rescue levels were used and the problem stayed.<br>It is not caused by modules or scripts, so the protector stopped rebooting.';
+    $('rescueItems').innerHTML = ''; $('rescueBtns').style.display = 'none';
+    return;
+  }
+  $('rescueBtns').style.display = 'flex';
+  $('rescueTitle').textContent = gave ? 'Gave up after a rescue' : 'Rescue happened';
+  $('rescueMeta').innerHTML =
+    '<b>when</b>' + esc(fmtDate(st.rescue_time)) + '<br>' +
+    '<b>reason</b>' + esc(st.rescue_reason || '-') + '<br>' +
+    '<b>scope</b>' + (st.rescue_level === '1' ? 'level 1 · new and changed only' : 'level 2 · everything');
+  var key = st.rescue_time + '/' + items;
+  if (key === _rescueKey) return;
+  _rescueKey = key;
+  var list = await bp('rescue-list');
+  $('rescueItems').innerHTML = (list || '').split('\n').filter(Boolean).map(function (l) {
+    var v = l.indexOf('script:') === 0 ? l.slice(7).split('/').pop() + ' (script)' : l.replace(/^module:/, '');
+    return '<span>' + esc(v) + '</span>';
+  }).join('');
+}
+
+// ── Modules and scripts ──────────────────────────────────────────────────────
+var BADGES = {
+  self: ['PROTECTOR', 'teal'], trusted: ['TRUSTED', 'ok'], learning: ['LEARNING', 'dim'],
+  new: ['NEW', 'warn'], changed: ['UPDATED', 'warn'], pending: ['REBOOT PENDING', 'purple'],
+  disabled: ['DISABLED', 'dim'], off: ['NOT EXECUTABLE', 'dim'], rescued: ['DISABLED BY RESCUE', 'bad'], removing: ['REMOVING', 'dim']
+};
+var ORDER = { rescued: 0, new: 1, changed: 2, pending: 3, self: 4 };
+var ICON_MOD = '<path d="M20 7h-3V4a1 1 0 0 0-1-1h-3v1.5a1.5 1.5 0 0 1-3 0V3H7a1 1 0 0 0-1 1v3H4.5a1.5 1.5 0 0 0 0 3H6v3H4.5a1.5 1.5 0 0 0 0 3H6v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1z"/>';
+var ICON_SELF = '<path d="M12 2l8 3v6c0 5-3.4 8.7-8 11-4.6-2.3-8-6-8-11V5z"/><polyline points="9 12 11 14 15 10"/>';
+var ICON_SCR = '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>';
+function iconColor(s) {
+  if (s === 'rescued') return 'var(--red)';
+  if (s === 'new' || s === 'changed') return 'var(--amber)';
+  if (s === 'trusted' || s === 'self') return 'var(--teal)';
+  if (s === 'pending') return 'var(--purple)';
+  return 'var(--text-dim)';
+}
+function card(kind, key, name, sub, state, allow) {
+  var self = state === 'self', b = BADGES[state] || [state.toUpperCase(), 'dim'];
+  var cls = 'card st-' + state + (allow === '1' && state !== 'rescued' && state !== 'new' && state !== 'changed' ? ' st-keep' : '');
+  var right = self ? '<div class="lock">always on</div>'
+    : '<div class="spinner"></div><div class="toggle-wrap"><label class="toggle"><input type="checkbox" ' + (allow === '1' ? 'checked' : '') +
+      ' data-kind="' + kind + '" data-key="' + esc(key) + '" onchange="toggleAllow(this)"><span class="slider"></span></label><div class="toggle-cap">never disable</div></div>';
+  return '<div class="' + cls + '"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="' + iconColor(state) + '" stroke-width="1.7" stroke-linejoin="round">' +
+    (self ? ICON_SELF : kind === 'script' ? ICON_SCR : ICON_MOD) + '</svg></div>' +
+    '<div class="card-body"><div class="card-name">' + esc(name) + '</div><div class="card-key">' + esc(sub) + '</div>' +
+    '<span class="badge ' + b[1] + '">' + b[0] + '</span>' + (allow === '1' && !self ? '<span class="badge teal">KEPT ON RESCUE</span>' : '') +
+    '</div>' + right + '</div>';
+}
+async function loadModules() {
+  var rows = parseRows(await bp('modules', 60000));
+  rows.sort(function (a, b) {
+    var oa = ORDER[a[3]] != null ? ORDER[a[3]] : 9, ob = ORDER[b[3]] != null ? ORDER[b[3]] : 9;
+    return oa - ob || (a[1] || '').toLowerCase().localeCompare((b[1] || '').toLowerCase());
+  });
+  var fresh = rows.filter(function (r) { return r[3] === 'new' || r[3] === 'changed'; }).length;
+  var resc = rows.filter(function (r) { return r[3] === 'rescued'; }).length;
+  var kept = rows.filter(function (r) { return r[4] === '1'; }).length;
+  $('modCount').textContent = rows.length + ' installed' + (kept ? ' · ' + kept + ' never disable' : '') + (fresh ? ' · ' + fresh + ' not trusted yet' : '');
+  $('modules').innerHTML = rows.length ? rows.map(function (r) { return card('module', r[0], r[1] || r[0], r[0] + (r[2] ? ' · ' + r[2] : ''), r[3], r[4]); }).join('')
+    : '<div class="empty">no modules installed</div>';
+  $('chipMods').textContent = resc ? resc + ' off' : fresh ? fresh + ' new' : String(rows.length);
+  $('chipMods').className = resc ? 'bad' : '';
+  setV('pFresh', fresh ? fresh + ' new or updated' : 'none', fresh ? 'warn' : 'dim');
+  $('dot-mods').className = 'tdot' + (resc ? ' bad' : fresh ? ' warn' : '');
+
+  var srows = parseRows(await bp('scripts', 30000));
+  $('scriptsBlock').style.display = srows.length ? 'block' : 'none';
+  $('scrCount').textContent = srows.length ? srows.length + ' found' : '';
+  $('scripts').innerHTML = srows.map(function (r) { return card('script', r[1], r[1], r[0], r[3], r[4]); }).join('');
+}
+async function toggleAllow(el) {
+  var c = el.closest('.card'), on = el.checked ? 1 : 0;
+  c.classList.add('loading');
+  var out = (await bp((el.dataset.kind === 'script' ? 'allow-script ' : 'allow-module ') + q(el.dataset.key) + ' ' + on)).trim();
+  c.classList.remove('loading');
+  if (out !== 'ok') { el.checked = !el.checked; toast(out || 'Failed', 'err'); return; }
+  toast(on ? el.dataset.key + ' will never be disabled' : el.dataset.key + ' can be disabled by a rescue', 'ok');
+  loadModules();
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+var SETTINGS = [
+  { key: 'MAX_ATTEMPTS', grp: 'detect', name: 'Failed boots before a rescue', hint: 'boots in a row that did not finish',
+    steps: [2, 3, 4, 5, 6, 8, 10], fmt: function (v) { return v + '×'; },
+    icon: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>' },
+  { key: 'BOOT_TIMEOUT', grp: 'detect', name: 'Boot timeout', hint: 'a boot slower than this counts as failed',
+    steps: [60, 90, 120, 150, 180, 240, 300, 420, 600, 900], fmt: function (v) { return v + ' s'; },
+    icon: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/>' },
+  { key: 'ZYGOTE_MAX_RESTARTS', grp: 'detect', name: 'Zygote restarts = loop', hint: 'during boot, or soft reboots within 5 min',
+    steps: [2, 3, 4, 5, 6, 8, 10, 15, 20], fmt: function (v) { return v + '×'; },
+    icon: '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>' },
+  { key: 'TRUST_MINUTES', grp: 'detect', name: 'Minutes until trusted', hint: 'a new setup must run this long without problems',
+    steps: [1, 2, 5, 10, 15, 20, 30, 45, 60, 90, 120], fmt: function (v) { return v + ' min'; },
+    icon: '<path d="M12 2l8 3v6c0 5-3.4 8.7-8 11-4.6-2.3-8-6-8-11V5z"/>' },
+  { key: 'SYSTEMUI_MONITOR', grp: 'watch', name: 'SystemUI monitor', hint: 'rescue when SystemUI crash loops or stays down 30 s', toggle: true,
+    icon: '<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="5" x2="15" y2="5"/>' },
+  { key: 'VOLKEY_RESCUE', grp: 'watch', name: 'Volume Up rescue', hint: 'press Vol+ 3 times during the boot animation', toggle: true,
+    icon: '<path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>' }
+];
+var CONF = {};
+function settingCard(s) {
+  var v = CONF[s.key], right;
+  if (s.toggle) {
+    right = '<div class="spinner"></div><div class="toggle-wrap"><label class="toggle"><input type="checkbox" ' + (v === '1' ? 'checked' : '') +
+      ' onchange="setToggle(\'' + s.key + '\', this)"><span class="slider"></span></label></div>';
+  } else {
+    right = '<div class="spinner"></div><div class="stepper"><button onclick="step(\'' + s.key + '\', -1)">−</button>' +
+      '<span id="val-' + s.key + '">' + esc(s.fmt(v)) + '</span><button onclick="step(\'' + s.key + '\', 1)">+</button></div>';
+  }
+  return '<div class="card" id="set-' + s.key + '"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+    s.icon + '</svg></div><div class="card-body"><div class="card-name" style="white-space:normal">' + esc(s.name) + '</div>' +
+    '<div class="card-key wrap">' + esc(s.hint) + '</div></div>' + right + '</div>';
+}
+async function loadSettings() {
+  CONF = parseKV(await bp('conf'));
+  $('setDetect').innerHTML = SETTINGS.filter(function (s) { return s.grp === 'detect'; }).map(settingCard).join('');
+  $('setWatch').innerHTML = SETTINGS.filter(function (s) { return s.grp === 'watch'; }).map(settingCard).join('');
+}
+async function saveSetting(key, value) {
+  var c = $('set-' + key); c.classList.add('loading');
+  var out = (await bp('set-conf ' + key + ' ' + value)).trim();
+  c.classList.remove('loading');
+  if (out !== 'ok') { toast(out || 'Failed', 'err'); return false; }
+  CONF[key] = String(value); toast('Saved - applies from the next boot', 'ok');
+  return true;
+}
+var stepTimers = {};
+function step(key, dir) {
+  var s = SETTINGS.filter(function (x) { return x.key === key; })[0], cur = num(CONF[key]), i = s.steps.indexOf(cur);
+  if (i < 0) { i = 0; while (i < s.steps.length - 1 && s.steps[i] < cur) i++; }
+  i = Math.max(0, Math.min(s.steps.length - 1, i + dir));
+  var nv = s.steps[i]; if (nv === cur) return;
+  CONF[key] = String(nv); $('val-' + key).textContent = s.fmt(nv);
+  clearTimeout(stepTimers[key]);
+  stepTimers[key] = setTimeout(function () { saveSetting(key, nv).then(loadStatus); }, 700);
+}
+async function setToggle(key, el) { if (!await saveSetting(key, el.checked ? 1 : 0)) el.checked = !el.checked; loadStatus(); }
+
+// ── Actions (tap twice) ──────────────────────────────────────────────────────
+function restoreAll(b) { if (armed(b, 'Sure? tap again')) act(b, 'restore'); }
+function keepDisabled(b) { if (armed(b, 'Sure? tap again')) act(b, 'dismiss'); }
+function trustNow(b) { if (armed(b, 'Trust what<br>runs now?')) act(b, 'trust-now', 90000); }
+function restartUi(b) { if (armed(b, 'Restart?<br>tap again')) act(b, 'restart-systemui'); }
+function disableAll(b) { if (armed(b, 'Disable all?<br>tap again')) act(b, 'disable-all', 90000); }
+function enableAll(b) { if (armed(b, 'Enable all?<br>tap again')) act(b, 'enable-all'); }
+
+// ── Log ──────────────────────────────────────────────────────────────────────
+var FILTER = 'all', LOG_TEXT = '';
+function setFilter(f) {
+  FILTER = f;
+  $('f-all').className = 'fbtn' + (f === 'all' ? ' active' : '');
+  $('f-events').className = 'fbtn' + (f === 'events' ? ' active' : '');
+  renderLog();
+}
+function lineClass(l) {
+  if (/RESCUE|FAILURE|Gave up|Boot loop|not caused by modules/i.test(l)) return 'bad';
+  if (/restarted|not running|did not|Soft reboot|Volume Up|Not trusting|going (straight )?to level|Rescue closed/i.test(l)) return 'warn';
+  if (/Good boot|trusted|restored|Restore done|Boot completed/i.test(l)) return 'good';
+  if (/boot started/.test(l)) return 'boot';
+  if (/\[cli\]/.test(l)) return 'dim';
+  return '';
+}
+function renderLog() {
+  var body = $('logBody');
+  // newest first, like the other modules
+  var lines = LOG_TEXT.split('\n').filter(Boolean).reverse();
+  if (FILTER === 'events') lines = lines.filter(function (l) { var c = lineClass(l); return c === 'bad' || c === 'warn' || c === 'good'; });
+  if (!lines.length) { body.innerHTML = '<span class="log-empty">empty</span>'; return; }
+  body.innerHTML = lines.map(function (l) {
+    var m = l.match(/^(\d{4}-(\d\d-\d\d \d\d:\d\d:\d\d)|\(clock not set\))\s+\[([^\]]+)\](.*)$/);
+    var inner = m ? '<span class="ts">' + esc(m[2] || 'early boot') + ' ' + esc(m[3]) + '</span>' + esc(m[4]) : esc(l);
+    return '<span class="log-line ' + lineClass(l) + '">' + inner + '</span>';
+  }).join('');
+  body.scrollTop = 0;
+}
+async function loadLog() { LOG_TEXT = await bp('log', 20000); renderLog(); }
+async function clearLog(b) {
+  if (!armed(b, 'sure?')) return;
+  await bp('clear-log'); await loadLog(); toast('Log cleared', 'ok'); loadStatus();
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+async function refreshAll() { await loadStatus(); await loadModules(); if (currentTab === 'log') await loadLog(); }
+// Help is a normal page in the history; its Back button goes back to this one
+function openHelp() { window.location.href = 'help.html'; }
+
+async function init() {
+  if (!hasBridge()) { fatal('No root bridge found.'); return; }
+  try { EXEC_MODE = await detectExecMode(); } catch (e) { fatal('Root shell unavailable: ' + (e.message || e)); return; }
+  var saved = null; try { saved = sessionStorage.getItem('bp_tab'); } catch (e) {}
+  if (saved && saved !== 'dash') showTab(saved);
+  await loadStatus();
+  await loadModules();
+  await loadSettings();
+  if (currentTab === 'log') await loadLog();
+  $('footer').innerHTML = 'bootloop-protector · ' + esc(ST.version || '') + '<br>data in /data/adb/bootloop-protector';
+  setInterval(function () { if (!document.hidden && !BUSY) loadStatus(); }, 5000);
+  setInterval(function () { if (document.hidden || BUSY) return; if (currentTab === 'mods') loadModules(); if (currentTab === 'log') loadLog(); }, 10000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) loadStatus(); });
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

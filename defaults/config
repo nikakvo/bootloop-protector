@@ -1,0 +1,21 @@
+# Bootloop Protector settings
+# File: /data/adb/bootloop-protector/config
+# Changes apply from the next boot.
+
+# Failed boots in a row before a rescue starts (2-10)
+MAX_ATTEMPTS=3
+
+# Seconds to wait for the boot to complete (60-900)
+BOOT_TIMEOUT=180
+
+# Zygote restarts during boot that count as a crash loop (2-20)
+ZYGOTE_MAX_RESTARTS=4
+
+# Watch SystemUI after boot: 1 = on, 0 = off
+SYSTEMUI_MONITOR=1
+
+# Minutes a new setup must run without problems before it is trusted (1-120)
+TRUST_MINUTES=10
+
+# Volume Up pressed 3 times during the boot animation starts a rescue: 1 = on, 0 = off
+VOLKEY_RESCUE=1
