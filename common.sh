@@ -89,18 +89,46 @@ prop_get() {
   grep -m1 "^$2=" "$1/module.prop" 2>/dev/null | cut -d= -f2- | tr -d '\r'
 }
 
+CR=$(printf '\r')
+NL='
+'
+
+# read_props DIR - sets P_NAME, P_VERSION and P_VCODE from DIR/module.prop.
+# Same result as prop_get (first match, CR removed) but with no extra processes,
+# which matters when the WebUI lists many modules.
+read_props() {
+  P_NAME=""; P_VERSION=""; P_VCODE=""
+  _pn=0; _pv=0; _pc=0
+  [ -f "$1/module.prop" ] || return 0
+  while IFS= read -r _l || [ -n "$_l" ]; do
+    case "$_l" in
+      name=*) [ "$_pn" = 0 ] && { P_NAME=${_l#name=}; _pn=1; } ;;
+      version=*) [ "$_pv" = 0 ] && { P_VERSION=${_l#version=}; _pv=1; } ;;
+      versionCode=*) [ "$_pc" = 0 ] && { P_VCODE=${_l#versionCode=}; _pc=1; } ;;
+    esac
+  done < "$1/module.prop"
+  P_NAME=${P_NAME//$CR/}
+  P_VERSION=${P_VERSION//$CR/}
+  P_VCODE=${P_VCODE//$CR/}
+}
+
 # Fingerprint of everything in a module that can break a boot.
 # The description line is left out on purpose: many modules rewrite it on every boot.
+# The output is the same as in v1.0 (trusted setups stay valid), it only uses
+# far fewer processes: one cksum for all boot files and no grep/cut per prop.
 mod_fp() {
   (
     cd "$1" 2>/dev/null || exit 0
-    echo "$(prop_get . versionCode)|$(prop_get . version)"
+    read_props .
+    echo "$P_VCODE|$P_VERSION"
+    set --
     for f in post-fs-data.sh post-mount.sh service.sh boot-completed.sh system.prop sepolicy.rule; do
-      [ -f "$f" ] && cksum "$f"
+      [ -f "$f" ] && set -- "$@" "$f"
     done
+    [ $# -gt 0 ] && cksum "$@"
     find system vendor product system_ext odm zygisk -type f 2>/dev/null | wc -l
     du -sk system vendor product system_ext odm zygisk 2>/dev/null
-  ) | cksum | cut -d' ' -f1
+  ) | cksum | { read -r _c _r; echo "$_c"; }
 }
 
 # Every executable general script (hidden ones too)
@@ -138,16 +166,18 @@ disable_module() {
   [ -d "$m" ] || return 1
   if module_allowed "$1"; then bp_log "  keep module $1 (allowed)"; return 1; fi
   [ -f "$m/disable" ] && return 1
-  touch "$m/disable"
+  # Record first, then disable: if the rescue is cut off in between, Restore
+  # still knows about it (Restore skips items that are not really disabled)
   echo "module:$1" >> "$BP_STATE/rescue.list"
+  touch "$m/disable"
   bp_log "  disabled module $1"
 }
 
 disable_script() {
   [ -f "$1" ] && [ -x "$1" ] || return 1
   if script_allowed "$1"; then bp_log "  keep script $1 (allowed)"; return 1; fi
-  chmod 644 "$1"
   echo "script:$1" >> "$BP_STATE/rescue.list"
+  chmod 644 "$1"
   bp_log "  disabled script $1"
 }
 

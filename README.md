@@ -75,7 +75,8 @@ Open it from the module card in your root manager (in Magisk, with a WebUI app s
   disabled by rescue, reboot pending) and a **Never disable** switch
 - **Settings** - failed boots, boot timeout, zygote limit, trust time, SystemUI monitor,
   Volume Up rescue
-- **Log** - everything the protector did, newest first
+- **Log** - everything the protector did, newest first, with copy and save to `Download`
+  (the saved file starts with a short report for bug reports)
 
 The module card in the root manager also shows the state at a glance:
 `🛡️ Armed | Boot 🟢 | SystemUI 🟢 | Setup trusted 🟢`.
@@ -119,6 +120,9 @@ su -c 'sh /data/adb/modules/bootloop-protector/bp.sh trust-now'
 
 # read the log
 su -c 'cat /data/adb/bootloop-protector/bp.log'
+
+# save the log with a short report to Download
+su -c 'sh /data/adb/modules/bootloop-protector/bp.sh save-log'
 ```
 
 Run `bp.sh` without arguments for the full list.

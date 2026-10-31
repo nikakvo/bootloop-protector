@@ -46,8 +46,8 @@ disable_in() {
       continue
     fi
     [ -f "$m/disable" ] && continue
-    touch "$m/disable" && chmod 644 "$m/disable"
     echo "module:$id" >> "$LIST"
+    touch "$m/disable" && chmod 644 "$m/disable"
     ui_print "- Disabled $id"
   done
 }
@@ -71,8 +71,8 @@ recovery_rescue() {
         ui_print "- Keeping ${s##*/} (allowed)"
         continue
       fi
-      chmod 644 "$s"
       echo "script:$s" >> "$LIST"
+      chmod 644 "$s"
       ui_print "- Disabled script ${s##*/}"
     done
   done
@@ -96,6 +96,12 @@ recovery_rescue() {
 
   printf 'time=%s\nlevel=2\nreason=recovery flash\ncount=%s\n' "$(date +%s)" \
     "$(wc -l < "$LIST" 2>/dev/null || echo 0)" > "$DATA/state/last-rescue"
+  # This was a full (level 2) rescue: start counting fresh, so the next boot
+  # does not run another rescue at once, and a failure after it gives up
+  # instead of rebooting again
+  echo 0 > "$DATA/state/attempts"
+  echo 2 > "$DATA/state/level"
+  rm -f "$DATA/state/gaveup"
   echo "$(date '+%Y-%m-%d %H:%M:%S') [recovery] RESCUE from recovery flash" >> "$DATA/bp.log"
   ui_print " "
   ui_print "- Done. Reboot the phone."

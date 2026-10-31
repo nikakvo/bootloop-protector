@@ -238,6 +238,21 @@
   </table>
 </div>
 
+<div class="sec-title" id="log">log</div>
+<div class="box">
+  <p>The Log tab shows everything the protector did, newest first. <strong>EVENTS</strong> keeps only
+  failures, rescues and good boots. The tab refreshes on its own every 10 seconds without moving you,
+  so you can scroll down and read older lines in peace.</p>
+  <ul>
+    <li><strong>copy</strong> - copies the whole log to the clipboard.</li>
+    <li><strong>save</strong> - writes a file to <code>Download</code>, named
+      <code>bootloop-protector-DATE-TIME.log</code>. It starts with a short report (module version,
+      phone model, Android, root manager, settings, rescue state, modules and scripts with their state),
+      followed by the full log. Attach it when you report a problem.</li>
+    <li><strong>clear</strong> - deletes the log (tap twice).</li>
+  </ul>
+</div>
+
 <div class="sec-title" id="files">files</div>
 <div class="box">
   <p>Everything is in one folder, <code>/data/adb/bootloop-protector</code>, and survives module updates.
@@ -273,7 +288,10 @@ su -c 'sh /data/adb/modules/bootloop-protector/bp.sh allow-module MODULE_ID 1'
 su -c 'sh /data/adb/modules/bootloop-protector/bp.sh set-conf BOOT_TIMEOUT 120'
 
 <span class="cm"># read the log</span>
-su -c 'cat /data/adb/bootloop-protector/bp.log'</pre>
+su -c 'cat /data/adb/bootloop-protector/bp.log'
+
+<span class="cm"># save the log with a short report to Download</span>
+su -c 'sh /data/adb/modules/bootloop-protector/bp.sh save-log'</pre>
   <p>Run <code>bp.sh</code> without arguments for the full list.</p>
 </div>
 

@@ -1,3 +1,15 @@
+## v1.1
+
+- The WebUI opens much faster: status and settings show up first, and the module list
+  needs far less work per module
+- Log: auto refresh no longer jumps back to the top while you scroll through older lines
+- Log: new copy button
+- Log: new save button - writes the log with a short report (version, phone, root manager,
+  settings, rescue state, modules) to the Download folder, handy for bug reports
+- Flashing the zip in recovery now resets the boot counter, so the first boot after it
+  does not start another rescue
+- A rescue records each item before switching it off, so Restore never misses one
+
 ## v1.0
 
 First release.

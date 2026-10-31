@@ -171,7 +171,8 @@
     .fbtn.danger.arm{background:var(--red-dim);color:#fff;border-color:var(--red);}
     .fbtn:active{opacity:0.5;}
     .log-size{font-size:9px;font-family:var(--mono);color:var(--text-dim);margin-left:auto;}
-    .log-body{font-family:var(--mono);font-size:10px;line-height:1.7;padding:9px 12px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+    .log-body{font-family:var(--mono);font-size:10px;line-height:1.7;padding:9px 12px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;overflow-anchor:none;}
+    .fbtn.working{opacity:0.5;pointer-events:none;}
     .log-line{display:block;white-space:pre-wrap;word-break:break-word;color:var(--text);}
     .log-line .ts{color:var(--text-dim);}
     .log-line.bad{color:var(--red);}
@@ -346,6 +347,8 @@
         <button class="fbtn active" id="f-all" onclick="setFilter('all')">ALL</button>
         <button class="fbtn" id="f-events" onclick="setFilter('events')">EVENTS</button>
         <button class="fbtn" onclick="loadLog()">↻</button>
+        <button class="fbtn" onclick="copyLog()">copy</button>
+        <button class="fbtn" id="logSave" onclick="saveLog(this)">save</button>
         <button class="fbtn danger" id="logClear" onclick="clearLog(this)">clear</button>
         <span class="log-size" id="logSize">-</span>
       </div>
@@ -414,7 +417,7 @@ async function act(btn, cmd, ms) {
     BUSY = false; document.body.classList.remove('locked');
   }
   _rescueKey = '';
-  await loadStatus(); await loadModules();
+  await Promise.all([loadStatus(), loadModules()]);
 }
 
 // Tap twice to confirm
@@ -456,11 +459,12 @@ function fatal(msg) {
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
 var currentTab = 'dash';
-function showTab(name) {
+function showTab(name, noLoad) {
   currentTab = name;
   document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
   document.querySelectorAll('.pane').forEach(function (p) { p.classList.toggle('active', p.id === 'pane-' + name); });
   try { sessionStorage.setItem('bp_tab', name); } catch (e) {}
+  if (noLoad) return;
   if (name === 'log') loadLog();
   if (name === 'mods') loadModules();
 }
@@ -578,8 +582,15 @@ function card(kind, key, name, sub, state, allow) {
     '<span class="badge ' + b[1] + '">' + b[0] + '</span>' + (allow === '1' && !self ? '<span class="badge teal">KEPT ON RESCUE</span>' : '') +
     '</div>' + right + '</div>';
 }
-async function loadModules() {
-  var rows = parseRows(await bp('modules', 60000));
+// Modules and scripts are read in parallel; a second call while one runs is skipped
+var _modsRun = null;
+function loadModules() {
+  if (!_modsRun) _modsRun = _loadModules().finally(function () { _modsRun = null; });
+  return _modsRun;
+}
+async function _loadModules() {
+  var res = await Promise.all([bp('modules', 60000), bp('scripts', 30000)]);
+  var rows = parseRows(res[0]);
   rows.sort(function (a, b) {
     var oa = ORDER[a[3]] != null ? ORDER[a[3]] : 9, ob = ORDER[b[3]] != null ? ORDER[b[3]] : 9;
     return oa - ob || (a[1] || '').toLowerCase().localeCompare((b[1] || '').toLowerCase());
@@ -595,7 +606,7 @@ async function loadModules() {
   setV('pFresh', fresh ? fresh + ' new or updated' : 'none', fresh ? 'warn' : 'dim');
   $('dot-mods').className = 'tdot' + (resc ? ' bad' : fresh ? ' warn' : '');
 
-  var srows = parseRows(await bp('scripts', 30000));
+  var srows = parseRows(res[1]);
   $('scriptsBlock').style.display = srows.length ? 'block' : 'none';
   $('scrCount').textContent = srows.length ? srows.length + ' found' : '';
   $('scripts').innerHTML = srows.map(function (r) { return card('script', r[1], r[1], r[0], r[3], r[4]); }).join('');
@@ -692,27 +703,68 @@ function lineClass(l) {
   if (/\[cli\]/.test(l)) return 'dim';
   return '';
 }
-function renderLog() {
+// keep = automatic refresh: leave the reader where they are
+function renderLog(keep) {
   var body = $('logBody');
   // newest first, like the other modules
   var lines = LOG_TEXT.split('\n').filter(Boolean).reverse();
   if (FILTER === 'events') lines = lines.filter(function (l) { var c = lineClass(l); return c === 'bad' || c === 'warn' || c === 'good'; });
+  var top = body.scrollTop, oldH = body.scrollHeight;
   if (!lines.length) { body.innerHTML = '<span class="log-empty">empty</span>'; return; }
   body.innerHTML = lines.map(function (l) {
     var m = l.match(/^(\d{4}-(\d\d-\d\d \d\d:\d\d:\d\d)|\(clock not set\))\s+\[([^\]]+)\](.*)$/);
     var inner = m ? '<span class="ts">' + esc(m[2] || 'early boot') + ' ' + esc(m[3]) + '</span>' + esc(m[4]) : esc(l);
     return '<span class="log-line ' + lineClass(l) + '">' + inner + '</span>';
   }).join('');
-  body.scrollTop = 0;
+  // New lines come in at the top. Someone reading further down stays on the same
+  // lines; someone at the very top sees the new ones.
+  if (!keep) body.scrollTop = 0;
+  else if (top > 4) body.scrollTop = top + (body.scrollHeight - oldH);
 }
-async function loadLog() { LOG_TEXT = await bp('log', 20000); renderLog(); }
+var _logRun = null;
+async function loadLog(auto) {
+  if (_logRun) return _logRun;
+  _logRun = (async function () {
+    var text = await bp('log', 20000);
+    if (auto && text === LOG_TEXT) return;   // nothing new - do not touch the page
+    LOG_TEXT = text; renderLog(!!auto);
+  })().finally(function () { _logRun = null; });
+  return _logRun;
+}
+// execCommand works in every root manager WebView; the Clipboard API is the backup
+function copyText(text) {
+  var ok = false, ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:-9999px;left:0;opacity:0;';
+  document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  if (ok) return Promise.resolve(true);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; });
+  }
+  return Promise.resolve(false);
+}
+async function copyLog() {
+  if (!LOG_TEXT.trim()) { toast('The log is empty', 'err'); return; }
+  var ok = await copyText(LOG_TEXT);
+  toast(ok ? 'Log copied (' + LOG_TEXT.split('\n').filter(Boolean).length + ' lines)' : 'Copy failed - use save instead', ok ? 'ok' : 'err');
+}
+async function saveLog(b) {
+  if (BUSY) { toast('Wait - the previous action is still running', 'err'); return; }
+  b.classList.add('working');
+  try {
+    var out = (await bp('save-log', 60000)).trim().split('\n').pop();
+    toast(out || 'Save failed', /^Saved/.test(out) ? 'ok' : 'err');
+  } finally { b.classList.remove('working'); }
+}
 async function clearLog(b) {
   if (!armed(b, 'sure?')) return;
   await bp('clear-log'); await loadLog(); toast('Log cleared', 'ok'); loadStatus();
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
-async function refreshAll() { await loadStatus(); await loadModules(); if (currentTab === 'log') await loadLog(); }
+async function refreshAll() { await Promise.all([loadStatus(), loadModules()]); if (currentTab === 'log') await loadLog(); }
 // Help is a normal page in the history; its Back button goes back to this one
 function openHelp() { window.location.href = 'help.html'; }
 
@@ -720,14 +772,16 @@ async function init() {
   if (!hasBridge()) { fatal('No root bridge found.'); return; }
   try { EXEC_MODE = await detectExecMode(); } catch (e) { fatal('Root shell unavailable: ' + (e.message || e)); return; }
   var saved = null; try { saved = sessionStorage.getItem('bp_tab'); } catch (e) {}
-  if (saved && saved !== 'dash') showTab(saved);
-  await loadStatus();
-  await loadModules();
-  await loadSettings();
-  if (currentTab === 'log') await loadLog();
+  if (saved && saved !== 'dash') showTab(saved, true);
+  // Status and settings are quick - show them first. The module list needs a
+  // fingerprint per module, so it fills in on its own while the page is usable.
+  var mods = loadModules();
+  if (currentTab === 'log') loadLog();
+  await Promise.all([loadStatus(), loadSettings()]);
   $('footer').innerHTML = 'bootloop-protector · ' + esc(ST.version || '') + '<br>data in /data/adb/bootloop-protector';
+  await mods;
   setInterval(function () { if (!document.hidden && !BUSY) loadStatus(); }, 5000);
-  setInterval(function () { if (document.hidden || BUSY) return; if (currentTab === 'mods') loadModules(); if (currentTab === 'log') loadLog(); }, 10000);
+  setInterval(function () { if (document.hidden || BUSY) return; if (currentTab === 'mods') loadModules(); if (currentTab === 'log') loadLog(true); }, 10000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) loadStatus(); });
 }
 document.addEventListener('DOMContentLoaded', init);

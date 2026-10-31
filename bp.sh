@@ -25,8 +25,93 @@ list_set() {
   fi
 }
 
-in_rescue() {
-  grep -Fxq "$1" "$BP_STATE/rescue.list" 2>/dev/null
+# load_lists - allow lists, rescue list and trusted setup in variables,
+# one entry per line with a newline on both ends for exact matching
+load_lists() {
+  ALLOWED_M="$NL$(list_clean "$BP_DATA/allowed-modules.txt")$NL"
+  ALLOWED_S="$NL$(list_clean "$BP_DATA/allowed-scripts.txt")$NL"
+  RESCUED="$NL$(cat "$BP_STATE/rescue.list" 2>/dev/null)$NL"
+  if [ -f "$BP_STATE/baseline" ]; then
+    HAVE_BASE=1
+    BASE="$NL$(cat "$BP_STATE/baseline")$NL"
+  else
+    HAVE_BASE=0
+    BASE=""
+  fi
+}
+
+cmd_modules() {
+  # id <tab> name <tab> version <tab> state <tab> never-disable
+  # Lists are read once here, not once per module - this is what the WebUI waits for
+  load_lists
+  for m in "$MODULES_DIR"/*/; do
+    m="${m%/}"
+    [ -d "$m" ] || continue
+    id="${m##*/}"
+    read_props "$m"
+    name=${P_NAME//$T/ }
+    ver=${P_VERSION//$T/ }
+    allow=0
+    if [ "$id" = "$BP_ID" ]; then
+      state=self
+    else
+      case "$ALLOWED_M" in *"$NL$id$NL"*) allow=1 ;; esac
+      if [ -f "$m/remove" ]; then
+        state=removing
+      elif [ -f "$m/disable" ]; then
+        case "$RESCUED" in *"${NL}module:$id$NL"*) state=rescued ;; *) state=disabled ;; esac
+      elif [ -d "$ADB/modules_update/$id" ] || [ -f "$m/update" ]; then
+        state=pending
+      elif [ "$HAVE_BASE" = 0 ]; then
+        state=learning
+      else
+        fp=$(mod_fp "$m")
+        case "$BASE" in
+          *"${NL}module:$id $fp$NL"*) state=trusted ;;
+          *"${NL}module:$id "*) state=changed ;;
+          *) state=new ;;
+        esac
+      fi
+    fi
+    echo "$id$T${name:-$id}$T$ver$T$state$T$allow"
+  done
+}
+
+cmd_scripts() {
+  # folder <tab> name <tab> path <tab> state <tab> never-disable
+  load_lists
+  for d in $SCRIPT_DIRS; do
+    [ -d "$d" ] || continue
+    for s in "$d"/* "$d"/.[!.]*; do
+      [ -f "$s" ] || continue
+      n="${s##*/}"
+      allow=0
+      case "$ALLOWED_S" in *"$NL$n$NL"*) allow=1 ;; esac
+      if [ ! -x "$s" ]; then
+        case "$RESCUED" in *"${NL}script:$s$NL"*) state=rescued ;; *) state=off ;; esac
+      elif [ "$HAVE_BASE" = 0 ]; then
+        state=learning
+      else
+        ck=$(cksum < "$s")
+        ck=${ck%% *}
+        case "$BASE" in
+          *"${NL}script:$s $ck$NL"*) state=trusted ;;
+          *"${NL}script:$s "*) state=changed ;;
+          *) state=new ;;
+        esac
+      fi
+      echo "${d##*/}$T$n$T$s$T$state$T$allow"
+    done
+  done
+}
+
+cmd_conf() {
+  echo "MAX_ATTEMPTS=$(conf_num MAX_ATTEMPTS 3 2 10)"
+  echo "BOOT_TIMEOUT=$(conf_num BOOT_TIMEOUT 180 60 900)"
+  echo "ZYGOTE_MAX_RESTARTS=$(conf_num ZYGOTE_MAX_RESTARTS 4 2 20)"
+  echo "SYSTEMUI_MONITOR=$(conf_num SYSTEMUI_MONITOR 1 0 1)"
+  echo "TRUST_MINUTES=$(conf_num TRUST_MINUTES 10 1 120)"
+  echo "VOLKEY_RESCUE=$(conf_num VOLKEY_RESCUE 1 0 1)"
 }
 
 case "$1" in
@@ -58,61 +143,11 @@ case "$1" in
     ;;
 
   modules)
-    # id <tab> name <tab> version <tab> state <tab> never-disable
-    for m in "$MODULES_DIR"/*/; do
-      m="${m%/}"
-      [ -d "$m" ] || continue
-      id="${m##*/}"
-      name=$(prop_get "$m" name | tr '\t' ' ')
-      ver=$(prop_get "$m" version | tr '\t' ' ')
-      allow=0
-      if [ "$id" = "$BP_ID" ]; then
-        state=self
-      else
-        list_clean "$BP_DATA/allowed-modules.txt" | grep -Fxq "$id" && allow=1
-        if [ -f "$m/remove" ]; then
-          state=removing
-        elif [ -f "$m/disable" ]; then
-          if in_rescue "module:$id"; then state=rescued; else state=disabled; fi
-        elif [ -d "$ADB/modules_update/$id" ] || [ -f "$m/update" ]; then
-          state=pending
-        elif [ ! -f "$BP_STATE/baseline" ]; then
-          state=learning
-        elif grep -Fxq "module:$id $(mod_fp "$m")" "$BP_STATE/baseline"; then
-          state=trusted
-        elif grep -q "^module:$id " "$BP_STATE/baseline"; then
-          state=changed
-        else
-          state=new
-        fi
-      fi
-      echo "$id$T${name:-$id}$T$ver$T$state$T$allow"
-    done
+    cmd_modules
     ;;
 
   scripts)
-    # folder <tab> name <tab> path <tab> state <tab> never-disable
-    for d in $SCRIPT_DIRS; do
-      [ -d "$d" ] || continue
-      for s in "$d"/* "$d"/.[!.]*; do
-        [ -f "$s" ] || continue
-        n="${s##*/}"
-        allow=0
-        list_clean "$BP_DATA/allowed-scripts.txt" | grep -Fxq "$n" && allow=1
-        if [ ! -x "$s" ]; then
-          if in_rescue "script:$s"; then state=rescued; else state=off; fi
-        elif [ ! -f "$BP_STATE/baseline" ]; then
-          state=learning
-        elif grep -Fxq "script:$s $(cksum < "$s" | cut -d' ' -f1)" "$BP_STATE/baseline"; then
-          state=trusted
-        elif grep -Fq "script:$s " "$BP_STATE/baseline"; then
-          state=changed
-        else
-          state=new
-        fi
-        echo "${d##*/}$T$n$T$s$T$state$T$allow"
-      done
-    done
+    cmd_scripts
     ;;
 
   allow-module)
@@ -131,12 +166,7 @@ case "$1" in
     ;;
 
   conf)
-    echo "MAX_ATTEMPTS=$(conf_num MAX_ATTEMPTS 3 2 10)"
-    echo "BOOT_TIMEOUT=$(conf_num BOOT_TIMEOUT 180 60 900)"
-    echo "ZYGOTE_MAX_RESTARTS=$(conf_num ZYGOTE_MAX_RESTARTS 4 2 20)"
-    echo "SYSTEMUI_MONITOR=$(conf_num SYSTEMUI_MONITOR 1 0 1)"
-    echo "TRUST_MINUTES=$(conf_num TRUST_MINUTES 10 1 120)"
-    echo "VOLKEY_RESCUE=$(conf_num VOLKEY_RESCUE 1 0 1)"
+    cmd_conf
     ;;
 
   set-conf)
@@ -211,6 +241,60 @@ case "$1" in
     cat "$BP_LOG.old" "$BP_LOG" 2>/dev/null
     ;;
 
+  save-log)
+    # Log plus a short report (version, device, settings, rescue, modules) for bug reports
+    dir=""
+    for d in /sdcard/Download /storage/emulated/0/Download; do
+      [ -d "$d" ] && { dir=$d; break; }
+    done
+    [ -n "$dir" ] || { echo "Download folder not found"; exit 1; }
+    f="$dir/bootloop-protector-$(date '+%Y%m%d-%H%M%S').log"
+    root=""
+    [ -d "$ADB/ksu" ] && root="$root KernelSU/SukiSU"
+    [ -d "$ADB/ap" ] && root="$root APatch"
+    [ -d "$ADB/magisk" ] && root="$root Magisk"
+    umask 022
+    {
+      echo "Bootloop Protector $(prop_get "$MODDIR" version) - saved $(date '+%Y-%m-%d %H:%M:%S')"
+      echo "Device : $(getprop ro.product.manufacturer) $(getprop ro.product.model)"
+      echo "Android: $(getprop ro.build.version.release) (SDK $(getprop ro.build.version.sdk))"
+      echo "Kernel : $(uname -r)"
+      echo "Root   :${root:- unknown}"
+      echo ""
+      echo "== settings =="
+      cmd_conf
+      echo ""
+      echo "== state =="
+      echo "attempts=$(state_get attempts 0) level=$(state_get level 0)" \
+        "trusted=$([ -f "$BP_STATE/baseline" ] && echo yes || echo no)" \
+        "gaveup=$([ -f "$BP_STATE/gaveup" ] && echo yes || echo no)"
+      if [ -f "$BP_STATE/last-rescue" ]; then
+        echo "last rescue: $(tr '\n' ' ' < "$BP_STATE/last-rescue")"
+      fi
+      if [ -s "$BP_STATE/rescue.list" ]; then
+        echo "waiting for Restore:"
+        sed 's/^/  /' "$BP_STATE/rescue.list"
+      fi
+      echo ""
+      echo "== modules (id, version, state, never disable) =="
+      # empty fields become "-" so read does not merge the tabs
+      cmd_modules | sed -e "s/$T$T/$T-$T/g" -e "s/$T$T/$T-$T/g" | while IFS="$T" read -r id name ver st al; do
+        echo "  $id  $ver  $st$([ "$al" = 1 ] && echo '  never-disable')"
+      done
+      echo ""
+      echo "== scripts (folder, name, state) =="
+      cmd_scripts | sed -e "s/$T$T/$T-$T/g" -e "s/$T$T/$T-$T/g" | while IFS="$T" read -r fo n p st al; do
+        echo "  $fo/$n  $st$([ "$al" = 1 ] && echo '  never-disable')"
+      done
+      echo ""
+      echo "== log =="
+      cat "$BP_LOG.old" "$BP_LOG" 2>/dev/null
+    } > "$f" 2>/dev/null
+    [ -s "$f" ] || { rm -f "$f" 2>/dev/null; echo "Could not write to $dir"; exit 1; }
+    chmod 644 "$f" 2>/dev/null
+    echo "Saved to Download/${f##*/}"
+    ;;
+
   clear-log)
     rm -f "$BP_LOG" "$BP_LOG.old"
     bp_log "Log cleared"
@@ -221,7 +305,7 @@ case "$1" in
     echo "Commands: status, modules, scripts, conf, set-conf KEY VALUE,"
     echo "          allow-module ID 0|1, allow-script NAME 0|1, rescue-list,"
     echo "          restore, dismiss, disable-all, enable-all, trust-now,"
-    echo "          restart-systemui, log, clear-log"
+    echo "          restart-systemui, log, save-log, clear-log"
     exit 1
     ;;
 esac
