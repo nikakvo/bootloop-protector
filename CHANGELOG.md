@@ -1,3 +1,7 @@
+## v1.2
+
+- The WebUI opens fast again on a quick reopen: no more waiting about 8 seconds for the status
+
 ## v1.1
 
 - The WebUI opens much faster: status and settings show up first, and the module list
